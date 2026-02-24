@@ -1,38 +1,35 @@
-# Bricker: Advanced OOP Game Engine (Java)
+# Interactive ASCII Art Generator (Java)
 
-An extensible, feature-rich "Breakout" clone developed using **Java** and the **Danogl** game framework. This project demonstrates high-level mastery of **Object-Oriented Design Patterns**, specifically the **Strategy** and **Factory** patterns.
+A robust Java application that transforms standard images into detailed ASCII art using grayscale brightness mapping and a custom interactive shell.
 
-## 🏗️ Architecture & Design Patterns
+## 🖼️ Project Overview
 
-### 1. Strategy Design Pattern
-The core of the game’s extensibility lies in the `CollisionStrategy` interface. Instead of hardcoding collision logic, each `Brick` delegates its behavior to a strategy object.
-* **Encapsulation**: Bricks handle their own removal and counter decrements via `onCollision`.
-* **Composite Strategy**: The `DoubleStrategy` class allows multiple behaviors to be wrapped into a single event, enabling a brick to trigger two special effects at once.
+This project implements an algorithm to process images, calculate block-level brightness, and match them with the most suitable ASCII characters based on their visual density. It features a fully interactive command-line interface (CLI) for real-time configuration and generation.
 
-### 2. Strategy Factory
-The `StrategyFactory` manages the randomized generation of brick behaviors with specific probabilities:
-* **Probability Logic**: 10% Puck, 20% Extra Paddle, 30% Turbo, 40% Heart, and 50% Double behavior (limited to a depth of 1 to prevent infinite recursion).
+## 🛠️ Key Components & Architecture
 
-## 🎮 Game Features & Mechanics
+### 1. Core Algorithm (`AsciiArtAlgorithm`)
+* **Brightness Mapping**: Uses the perceptual luminance formula ($0.2126R + 0.7152G + 0.0722B$) to ensure accurate grayscale representation.
+* **Image Padding**: Automatically pads images to the nearest power of two for optimal block processing.
+* **Rounding Policies**: Supports Absolute, Upward, and Downward rounding for character selection.
 
-* **Turbo Mode**: Accelerates the ball by $1.4x$ and changes its visual state to a red ball for 6 consecutive collisions.
-* **Puck System**: Spawns two secondary "Puck" balls with randomized upward trajectories.
-* **Dynamic UI**: Synchronized life tracking using both **Graphic Hearts** and **Numeric Text** renderables, color-coded by remaining life count (Green/Yellow/Red).
-* **Collision Filtering**: Objects like the `Heart` utilize `shouldCollideWith` to interact exclusively with the main paddle.
+### 2. Character Matching (`SubImgCharMatcher`)
+* **Character-to-Binary Conversion**: Renders ASCII characters into 16x16 boolean masks to calculate their raw brightness.
+* **Normalization**: Linear stretching of character brightness values to fit the full $[0, 1]$ range for better contrast.
+
+### 3. Interactive Shell (`Shell`)
+* **Dynamic Configuration**: Add/remove characters, change resolution (characters per row), and switch output formats (Console or HTML) on the fly.
+* **Robust Error Handling**: Custom exception management for invalid user inputs and file operations.
 
 
-## 🛠️ Technologies
-* **Java SDK**
-* **Danogl Game Framework**
-* **OOP Principles**: Inheritance, Polymorphism, Recursion, and Factory Method.
-
-## 🧠 Key Learning Outcomes
-* Implementing a **Decoupled System** where game objects don't rely on the manager for their specific logic.
-* Managing complex **Recursive Data Structures** through the composite pattern in `DoubleStrategy`.
-* Real-time **State Management** for multiple paddles, balls, and global counters.
+## 💻 Technologies
+* **Java SDK** (Advanced OOP, Sets, Maps, and Enums).
+* **Image Processing**: Pixels-to-Blocks conversion and perceptual brightness calculation.
+* **Design Patterns**: Implementation of the Strategy pattern for output management.
 
 ## 🚀 How to Run
+
+Launch the interactive shell by providing an image path:
 ```bash
-# Ensure Danogl.jar is in your library path
-java -cp ".;lib/*" bricker.main.BrickerGameManager
+java ascii_art.Shell <image_path>
 
