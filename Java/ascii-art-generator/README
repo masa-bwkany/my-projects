@@ -1,0 +1,93 @@
+massa.bwakny, fadi.roshrosh
+213852759, 214025868
+
+1) Class Responsibilities and Relationships
+
+Shell: serves as the interactive command-line driver. It holds the source Image,
+the current charset, resolution,
+rounding mode, and output target. It reads user commands, validates them,
+and dispatches to private handler methods (doAdd, doRes, etc.),
+using UserInputException to report any invalid input without terminating the session.
+
+AsciiArtAlgorithm: encapsulates a single run of the conversion pipeline.
+It pads the source image to powers of two, divides it into square tiles,
+computes each tile’s normalized brightness, and invokes a provided
+SubImgCharMatcher to choose the best ASCII character per tile.
+Its run() method returns the resulting 2D char matrix.
+
+UserInputException: is a checked exception thrown by Shell whenever a
+command or its arguments fail validation;
+the main loop catches it and prints its message.
+
+KeyboardInput: is a simple singleton wrapper around Scanner that provides
+trimmed line-reads from standard input for Shell.
+
+AsciiOutput: is an interface defining a single out(char[][]) method.
+ConsoleAsciiOutput and HtmlAsciiOutput implement this interface to render the
+ASCII art to the console or to an HTML file, respectively.
+
+Image: wraps a 2D Color[][] pixel array, loaded from disk or provided manually,
+and offers getters for width, height, individual pixels, and an optional saveImage() method.
+
+SubImgCharMatcher: builds and caches the raw brightness of each ASCII character (via CharConverter),
+normalizes these values to [0,1], and provides three lookup methods
+(closest, closestGE, closestLE) to match a target brightness, breaking ties by the lowest ASCII code.
+
+CharConverter: renders a single character in “Courier New” at 16×16 pixels,
+ producing a black-and-white mask (boolean[][]) that SubImgCharMatcher uses to compute raw brightness.
+
+
+
+2) Data Structures, Usage, and Complexity
+
+A HashSet<Character> in Shell stores the active charset,
+providing O(1) add/remove/contains for up to 95 printable ASCII characters.
+
+An ArrayList<Character> in doChars collects and sorts
+the charset in O(n log n) time—acceptable for n≤95—and prints it.
+
+Two HashMap<Character,Double> instances in SubImgCharMatcher hold cached raw brightness
+(RAW_CACHE) and current normalized brightness (normBrightness), both offering O(1) lookups and updates.
+
+Primitive 2D arrays (double[][] brightnessCache and char[][] ascii) in AsciiArtAlgorithm
+are sized by the padded image’s tile grid and accessed in O(1) per element;
+initializing and scanning them is linear in the number of tiles.
+
+Arrays.fill(...) initializes the brightness cache in O(rows×cols).
+Overall, this design yields constant-time brightness lookups and linear-time image scans,
+with memory proportional to the charset size and the number of image tiles.
+
+
+
+3) Exception Handling for User Input
+Each doXXX(...) handler in Shell declares throws UserInputException.
+They first verify parts.length and argument formats,
+then throw a UserInputException with a specific message
+(e.g., "Did not add due to incorrect format.") on any violation.
+The main loop in run(...) catches every UserInputException and prints its message exactly once,
+then continues prompting the user without terminating.
+
+4) SubImgCharMatcher API Changes
+I extended the original API for two key reasons:
+
+Support for “round up” and “round down” modes
+To cleanly implement the round up and round down options without duplicating complex loops in
+AsciiArtAlgorithm or Shell, I added two new public methods:
+public char closestGE(double target);
+char closestLE(double target);
+This way all brightness‐rounding logic stays centralized in the matcher, and AsciiArtAlgorithm simply
+chooses between closestGE, closestLE or the original closest.
+
+Improved single‐responsibility and convenience
+
+I introduced public char closest(double target) as a clear entry point for absolute rounding
+(internally calls getCharByImageBrightness).
+
+I added public void clear() to support the “remove all” command in Shell
+without exposing or iterating over the internal map.
+
+5) Changes to Supplied Classes
+
+No modifications were made to the ascii_output package (AsciiOutput, ConsoleAsciiOutput, HtmlAsciiOutput).
+All modifications to the provided classes were purely cosmetic—formatting, Javadoc comments,
+and naming conventions—without any functional changes.
