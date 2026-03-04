@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Generic Markov Chain & Applications – Part 2 (C)
 
 This project expands upon Part 1 by refactoring the Markov Chain engine into a truly **generic data structure**. By utilizing `void*` pointers and function pointers, the engine is now decoupled from the data it processes.
@@ -31,3 +32,13 @@ Part 2 implements a polymorphic Markov Chain. The same core logic now supports m
 **To compile the Tweets Generator:**
 ```bash
 gcc -Wall -Wextra -Wvla tweets_generator.c markov_chain.c linked_list.c -o tweets_generator
+=======
+# My Programming Projects
+
+Projects organized by language:
+
+* C
+* C++
+* Python
+* Java
+>>>>>>> 258c343a729263c10c5be3556652486f523a951d

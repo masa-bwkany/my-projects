@@ -1,0 +1,10 @@
+# macOS
+.DS_Store
+
+# build outputs
+*.o
+*.out
+a.out
+cmake-build-*/
+build/
+
