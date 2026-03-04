@@ -2,95 +2,122 @@
 #define _MARKOV_CHAIN_H
 
 #include "linked_list.h"
-#include <stdio.h>   // For printf(), sscanf()
-#include <stdlib.h>  // For malloc()
-#include <stdbool.h> // For bool
+#include <stdio.h>  // For printf(), sscanf()
+#include <stdlib.h> // For exit(), malloc()
+#include <stdbool.h> // for bool
 
-//Don't change this macro!
+//Don't change the macros!
 #define ALLOCATION_ERROR_MESSAGE "Allocation failure: Failed to allocate"\
-                                 "new memory\n"
+         "new memory\n"
+#define FAILURE_EXIT 1
+#define SUCCESS 0
 
-/* ניתן ומומלץ להגדיר טיפוסי מצביע-לפונקציה (typedef) */
-typedef void  (*print_func_t)(void *data);
-typedef int   (*comp_func_t)(void *data1, void *data2);
-typedef void  (*free_data_t)(void *data);
-typedef void *(*copy_func_t)(void *data);
-typedef bool  (*is_last_t)(void *data);
+
+/***************************/
+/*   insert typedefs here  */
+/***************************/
+typedef int     (*comp_func)     (void*, void*);     // Compare two data items
+typedef void*   (*copy_func)     (void*);            // Copy-allocate data
+typedef void    (*free_data)(void*);            // Free allocated data
+typedef void    (*print_func)    (void*);            // Print data
+typedef bool    (*is_last)  (void*);
 
 /***************************/
 /*        STRUCTS          */
 /***************************/
 
+typedef struct MarkovNode {
+    void *data;
+    struct MarkovNodeFrequency *frequency_list;
+    int freq_list_size;
+
+    // any other fields you need
+} MarkovNode;
+
 typedef struct MarkovNodeFrequency {
     struct MarkovNode *markov_node;
     int frequency;
-    // תוכלו להוסיף כאן שדות נוספים אם תרצו
+    // any other fields you need
 } MarkovNodeFrequency;
-
-typedef struct MarkovNode {
-    void *data;
-    MarkovNodeFrequency *frequency_list;
-    // תוכלו להוסיף כאן שדות נוספים אם תרצו
-    int freq_list_size;
-} MarkovNode;
 
 /* DO NOT ADD or CHANGE variable names in this struct */
 typedef struct MarkovChain {
     LinkedList *database;
 
-    print_func_t print_func;
-    comp_func_t  comp_func;
-    free_data_t  free_data;
-    copy_func_t  copy_func;
-    is_last_t    is_last;
+    // It is recommended to declare the function pointers using typedefs
+    print_func func_print;
+
+    comp_func func_comp ;
+
+    free_data func_free_data;
+
+    copy_func func_copy;
+
+    is_last func_is_last ;
 } MarkovChain;
 
-/****************************************************************/
-/*    פונקציות ספריית מרקוב – החתימות מחייבות לשם הבדיקה!    */
-/****************************************************************/
-
 /**
- * @brief מחזירה מצביע ל-Node ברשימה (של MarkovChain->database) שעוטף את ה-data_ptr
- * אם קיים, אחרת מחזירה NULL.
+ * Check if data_ptr is in database. If so, return the markov_node wrapping
+ * it in the markov_chain, otherwise return NULL.
+ * @param markov_chain the chain to look in its database
+ * @param data_ptr the state to look for
+ * @return Pointer to the Node wrapping given state, NULL if state not in
+ * database.
  */
 Node *get_node_from_database(MarkovChain *markov_chain, void *data_ptr);
 
 /**
- * @brief אם data_ptr כבר קיים בשרשרת - החזר את ה-Node העוטף אותו;
- *        אחרת - צור MarkovNode חדש, הוסף לסוף השרשרת והחזר את ה-Node החדש.
+* If data_ptr in markov_chain, return its node. Otherwise, create new
+ * node, add to end of markov_chain's database and return it.
+ * @param markov_chain the chain to look in its database
+ * @param data_ptr the state to look for
+ * @return node wrapping given data_ptr in given chain's database
  */
 Node *add_to_database(MarkovChain *markov_chain, void *data_ptr);
 
 /**
- * @brief הוספת second_node לרשימת התדירויות של first_node.
- *        אם already in list, מגדילים frequency+1.
- * @return 0 בהצלחה, 1 בכשל alloc.
+ * Add the second markov_node to the frequency list of the first markov_node.
+ * If already in list, update its frequency value.
+ * @param first_node
+ * @param second_node
+ * @return success/failure: 0 if the process was successful, 1 if in
+ * case of allocation error.
  */
-int add_node_to_frequency_list(MarkovNode *first_node, MarkovNode *second_node);
+int add_node_to_frequency_list(MarkovNode *first_node,
+                               MarkovNode *second_node);
 
 /**
- * @brief משחררת את כל הזיכרון של ה-MarkovChain (כולל הרשימה וכל MarkovNode).
+ * Free markov_chain and all of it's content from memory
+ * @param chain_ptr markov_chain to free
  */
 void free_database(MarkovChain **chain_ptr);
 
 /**
- * @brief מחזירה מילה/מצב התחלתי שאינו "אחרון" (ע"פ is_last).
- *        אם אין כאלה, מחזירה NULL.
+ * Get one random markov node from the given markov_chain's database.
+ * @param markov_chain
+ * @return MarkovNode of the chosen state that is not a "last state"
+ * in sequence.
  */
 MarkovNode *get_first_random_node(MarkovChain *markov_chain);
 
 /**
- * @brief בוחרת next state רנדומלי ביחס להסתברויות (frequency) מתוך cur_markov_node.
+ * Choose the next node, by its occurrence frequency in current node.
+ * @param cur_markov_node MarkovNode to choose from
+ * @return MarkovNode of the chosen state
  */
 MarkovNode *get_next_random_node(MarkovNode *cur_markov_node);
 
 /**
- * @brief גוזרת שרשרת רנדומלית (לפחות 2 איברים) ומדפיסה אותה.
- *        אם first_node == NULL נבחר first באופן רנדומלי שאינו "אחרון".
- * @param max_length - מספר האיברים המקסימלי בשרשרת (עוצרים מוקדם אם מגיעים ל"מצב אחרון").
+ * Receive markov_chain, generate and print random sequences out of it. The
+ * sequence most have at least 2 words in it.
+ * @param markov_chain
+ * @param first_node markov_node to start with, if NULL- choose a
+ * random markov_node
+ * @param  max_length maximum length of chain to generate
  */
 void generate_random_sequence(MarkovChain *markov_chain,
-                              MarkovNode *first_node,
-                              int max_length);
+                              MarkovNode *first_node, int max_length);
+int get_random_number(int max_number);
 
-#endif /* _MARKOV_CHAIN_H */
+
+#endif /* MARKOV_CHAIN_H */

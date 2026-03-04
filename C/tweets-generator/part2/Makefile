@@ -1,19 +1,29 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -std=c99 -pedantic -g
+CFLAGS = -Wall -Wextra -Wvla -std=c99
 
-TWEETS_GENERATOR_SRC = tweets_generator.c markov_chain.c linked_list.c
-TWEETS_GENERATOR_EXEC = tweets_generator
+OBJS = linked_list.o markov_chain.o
 
-SNAKES_AND_LADDERS_SRC = snakes_and_ladders.c markov_chain.c linked_list.c
-SNAKES_AND_LADDERS_EXEC = snakes_and_ladders
+.PHONY: all clean
 
-all: $(TWEETS_GENERATOR_EXEC) $(SNAKES_AND_LADDERS_EXEC)
+all: tweets_generator snakes_and_ladders
 
-$(TWEETS_GENERATOR_EXEC):
-	$(CC) $(CFLAGS) $(TWEETS_GENERATOR_SRC) -o $@
+tweets_generator: $(OBJS) tweets_generator.o
+	$(CC) $(CFLAGS) -o tweets_generator $(OBJS) tweets_generator.o
 
-$(SNAKES_AND_LADDERS_EXEC):
-	$(CC) $(CFLAGS) $(SNAKES_AND_LADDERS_SRC) -o $@
+snakes_and_ladders: $(OBJS) snakes_and_ladders.o
+	$(CC) $(CFLAGS) -o snakes_and_ladders $(OBJS) snakes_and_ladders.o
+
+markov_chain.o: markov_chain.c markov_chain.h linked_list.h
+	$(CC) $(CFLAGS) -c markov_chain.c
+
+linked_list.o: linked_list.c linked_list.h
+	$(CC) $(CFLAGS) -c linked_list.c
+
+tweets_generator.o: tweets_generator.c markov_chain.h
+	$(CC) $(CFLAGS) -c tweets_generator.c
+
+snakes_and_ladders.o: snakes_and_ladders.c markov_chain.h
+	$(CC) $(CFLAGS) -c snakes_and_ladders.c
 
 clean:
-	rm -f $(TWEETS_GENERATOR_EXEC) $(SNAKES_AND_LADDERS_EXEC)
+	rm -f *.o tweets_generator snakes_and_ladders

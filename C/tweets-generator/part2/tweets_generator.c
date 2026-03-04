@@ -1,113 +1,92 @@
-#include "markov_chain.h"
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include "markov_chain.h"
 
 #define FILE_PATH_ERROR "Error: incorrect file path"
-#define NUM_ARGS_ERROR  "Usage: invalid number of arguments"
+#define NUM_ARGS_ERROR "Usage: invalid number of arguments"
 #define ZERO 0
-#define SUCCESS 0
-#define FAILURE 1
+#define ONE 1
+#define TWO 2
+#define THREE 3
+#define FOUR 4
+#define FIVE 5
+#define TWENTY 20
+#define TEN 10
+#define ONE_THOUSAND 1001
+#define DELIMITERS " \n\t\r"
 
-#define DELIMITERS " \r\t\n"
-#define MAX_LINE_LEN 1001
-#define MAX_TWEET_LEN 20
 
-/**
- * @brief פונקציית העתקה גנרית למחרוזת (המשתמש מממש).
- */
-static void *copy_string(void *data)
-{
-    char *str = (char *) data;
-    char *dup = malloc(strlen(str) + 1);
-    if (!dup)
-    {
-        return NULL;
-    }
-    strcpy(dup, str);
-    return dup;
+static int str_comp(void *data1, void *data2) {
+    char *s1 = data1;
+    char *s2 = data2;
+    return strcmp(s1, s2);
 }
 
-/**
- * @brief פונקציית השוואה גנרית למחרוזת (המשתמש מממש).
- * @return 0 אם שוות, חיובי/שלילי לפי סדר לקסיקוגרפי.
- */
-static int comp_string(void *data1, void *data2)
-{
-    return strcmp((char *) data1, (char *) data2);
+static void *str_copy(void *source) {
+    char *s = source;
+    char *copy = malloc(strlen(s) + ONE);
+    if (!copy) return NULL;
+    strcpy(copy, s);
+    return copy;
 }
 
-/**
- * @brief פונקציית הדפסה גנרית למחרוזת (המשתמש מממש).
- */
-static void print_string(void *data)
-{
-    printf("%s", (char *) data);
-}
-
-/**
- * @brief פונקציית שחרור גנרית למחרוזת (המשתמש מממש).
- */
-static void free_string(void *data)
-{
+static void str_free(void *data) {
     free(data);
 }
 
-/**
- * @brief פונקציית בדיקה "האם זו מילה אחרונה" – בודק אם מסתיימת בנקודה '.'.
- */
-static bool is_last_in_tweet(void *data)
-{
-    char *str = (char *) data;
-    size_t len = strlen(str);
-    if (len == 0)
-    {
-        return false;
-    }
-    return (str[len - 1] == '.');
+static void str_print(void *data) {
+    printf("%s", (char*)data);
 }
 
-/**
- * @brief קורא שורות מהקובץ ומעדכן את ה-MarkovChain:
- *        לכל מילה מוסיף את המילה הבאה ברשימה (עד נקודה).
- * @param words_to_read 0 -> קרא את כל הקובץ, אחרת עצור כשמגיעים למספר מילים זה
- */
+static bool str_is_last(void *data) {
+    char *s = data;
+    size_t len = strlen(s);
+    if (len == ZERO) return false;
+    return (s[len - ONE] == '.');
+}
+
+
+static bool end_of_sentence(const char *word) {
+    if (!word) return false;
+    size_t len = strlen(word);
+    if (len == ZERO) return false;
+    return (word[len - ONE] == '.');
+}
+
+
 static void fill_database(FILE *fp, MarkovChain *chain, int words_to_read)
 {
-    char line[MAX_LINE_LEN];
-    int count_words = 0;
+    char line[ONE_THOUSAND];
+    int count_words = ZERO;
     Node *prev_node = NULL;
 
-    while ((words_to_read <= 0 || count_words < words_to_read)
-           && fgets(line, MAX_LINE_LEN, fp))
+    while ((words_to_read <= ZERO || count_words < words_to_read) &&
+           fgets(line, ONE_THOUSAND, fp) != NULL)
     {
         char *token = strtok(line, DELIMITERS);
-        while (token && (words_to_read <= 0 || count_words < words_to_read))
+        while (token && (words_to_read <= ZERO || count_words < words_to_read))
         {
-            /* מוסיפים token לשרשרת (אם לא קיים) */
             Node *curr_node = add_to_database(chain, token);
-            if (!curr_node)
-            {
-                return; // שגיאת הקצאה
+            if (!curr_node) {
+                return;
             }
-            MarkovNode *cur_mnode = (MarkovNode *) curr_node->data;
-
-            /* אם יש מילה קודמת, מוסיפים אותה לתדירויות */
-            if (prev_node)
-            {
-                MarkovNode *prev_mnode = (MarkovNode *) prev_node->data;
-                if (add_node_to_frequency_list(prev_mnode, cur_mnode) != 0)
-                {
-                    return; // שגיאה
+            MarkovNode *curr_mnode = curr_node->data;
+            if (prev_node) {
+                MarkovNode *prev_mnode = prev_node->data;
+                if (!str_is_last(prev_mnode->data)) {
+                    add_node_to_frequency_list(prev_mnode, curr_mnode);
                 }
             }
+
             prev_node = curr_node;
             count_words++;
 
-            /* אם הגענו למילה שמסתיימת בנקודה, נאתחל את prev_node ל-NULL */
-            if (is_last_in_tweet(token))
-            {
+            if (end_of_sentence(token)) {
                 prev_node = NULL;
             }
+
             token = strtok(NULL, DELIMITERS);
         }
     }
@@ -115,95 +94,80 @@ static void fill_database(FILE *fp, MarkovChain *chain, int words_to_read)
 
 int main(int argc, char *argv[])
 {
-    /* בודקים כמות פרמטרים */
-    if (argc != 4 && argc != 5)
-    {
-        printf("%s", NUM_ARGS_ERROR);
-        return FAILURE;
+    if (argc != FOUR && argc != FIVE) {
+        fprintf(stdout, "%s", NUM_ARGS_ERROR);
+        return ONE;
+    }
+    char *endptr;
+    unsigned long seed = strtoul(argv[ONE], &endptr, TEN);
+    if (*endptr != '\0') {
+        fprintf(stdout, "%s", NUM_ARGS_ERROR);
+        return ONE;
+    }
+    int tweets_num = strtol(argv[TWO], &endptr, TEN);
+    if (*endptr != '\0' || tweets_num <= ZERO) {
+        fprintf(stdout, "%s", NUM_ARGS_ERROR);
+        return ONE;
     }
 
-    /* 1) seed */
-    char *endptr = NULL;
-    unsigned long seed = strtoul(argv[1], &endptr, 10);
-    if (*endptr != '\0')
-    {
-        printf("%s", NUM_ARGS_ERROR);
-        return FAILURE;
-    }
-    srand((unsigned int) seed);
-
-    /* 2) num_of_tweets */
-    endptr = NULL;
-    long tweets_num = strtol(argv[2], &endptr, 10);
-    if (*endptr != '\0' || tweets_num <= 0)
-    {
-        printf("%s", NUM_ARGS_ERROR);
-        return FAILURE;
-    }
-
-    /* 3) file path */
-    char *file_path = argv[3];
-    FILE *fp = fopen(file_path, "r");
-    if (!fp)
-    {
-        printf("%s", FILE_PATH_ERROR);
-        return FAILURE;
-    }
-
-    /* 4) optional: words_to_read */
-    int words_to_read = 0;
-    if (argc == 5)
-    {
-        endptr = NULL;
-        long wtr = strtol(argv[4], &endptr, 10);
-        if (*endptr != '\0' || wtr < 0)
-        {
-            printf("%s", NUM_ARGS_ERROR);
-            fclose(fp);
-            return FAILURE;
+    char *filepath = argv[THREE];
+    int words_to_read = ZERO;
+    if (argc == FIVE) {
+        long w = strtol(argv[FOUR], &endptr, TEN);
+        if (*endptr != '\0') {
+            fprintf(stdout, "%s", NUM_ARGS_ERROR);
+            return ONE;
         }
-        words_to_read = (int) wtr;
+        words_to_read = (int)w;
+        if (words_to_read < ZERO) {
+            words_to_read = ZERO;
+        }
     }
 
-    /* יוצרים MarkovChain */
+    srand((unsigned int)seed);
+
+    FILE *fp = fopen(filepath, "r");
+    if (!fp) {
+        fprintf(stdout, "%s", FILE_PATH_ERROR);
+        return ONE;
+    }
+
     MarkovChain *chain = malloc(sizeof(MarkovChain));
-    if (!chain)
-    {
-        printf(ALLOCATION_ERROR_MESSAGE);
+    if (!chain) {
+        fprintf(stdout, ALLOCATION_ERROR_MESSAGE);
         fclose(fp);
-        return FAILURE;
+        return ONE;
     }
     chain->database = malloc(sizeof(LinkedList));
-    if (!chain->database)
-    {
-        printf(ALLOCATION_ERROR_MESSAGE);
+    if (!chain->database) {
+        fprintf(stdout, ALLOCATION_ERROR_MESSAGE);
         free(chain);
         fclose(fp);
-        return FAILURE;
+        return ONE;
     }
+
     chain->database->first = NULL;
-    chain->database->last  = NULL;
-    chain->database->size  = 0;
+    chain->database->last = NULL;
+    chain->database->size = ZERO;
 
-    /* מגדירים את הפונקציות הגנריות הרלוונטיות למחרוזות */
-    chain->print_func = print_string;
-    chain->comp_func  = comp_string;
-    chain->free_data  = free_string;
-    chain->copy_func  = copy_string;
-    chain->is_last    = is_last_in_tweet;
+    chain->func_comp = str_comp;
+    chain->func_copy = str_copy;
+    chain->func_free_data = str_free;
+    chain->func_print = str_print;
+    chain->func_is_last = str_is_last;
 
-    /*  שלב הלמידה: מילוי השרשרת מתוך הקובץ */
     fill_database(fp, chain, words_to_read);
     fclose(fp);
 
-    /*  שלב הפלט: יצירת ציוצים */
-    for (int i = 1; i <= tweets_num; i++)
-    {
+    for (int i = ONE; i <= tweets_num; i++) {
+        MarkovNode *first_node = get_first_random_node(chain);
         printf("Tweet %d: ", i);
-        generate_random_sequence(chain, NULL, MAX_TWEET_LEN);
+        if (!first_node) {
+            printf("\n");
+            continue;
+        }
+        generate_random_sequence(chain, first_node, TWENTY);
     }
-
-    /* משחררים זיכרון */
     free_database(&chain);
-    return SUCCESS;
+    return ZERO;
 }

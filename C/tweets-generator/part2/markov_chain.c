@@ -1,265 +1,215 @@
 #include "markov_chain.h"
+#include <string.h>
+#define ZERO 0
+#define ONE 1
 
 /**
- * @brief מחזיר מספר רנדומלי בטווח [0, max).
+ * Returns random integer in [0, max_number).
  */
-static int get_random_number(int max)
+int get_random_number(int max_number)
 {
-    if (max <= 0)
-    {
-        return 0;
-    }
-    return rand() % max;
+    return rand() % max_number;
 }
 
-/**
- * @brief מוצא ומחזיר מצביע ל-Node שעוטף data_ptr בשרשרת, או NULL אם לא קיים.
- */
-Node *get_node_from_database(MarkovChain *markov_chain, void *data_ptr)
+
+static bool is_last_data(MarkovChain *markov_chain, void *data)
 {
-    if (!markov_chain || !markov_chain->database)
-    {
-        return NULL;
+    if (!markov_chain->func_is_last) {
+        return false;
     }
-    Node *curr = markov_chain->database->first;
-    while (curr)
-    {
-        MarkovNode *mnode = (MarkovNode *) curr->data;
-        /* משווים בעזרת הפונקציה הגנרית שהמשתמש סיפק */
-        if (markov_chain->comp_func(mnode->data, data_ptr) == 0)
-        {
-            return curr;
+    return markov_chain->func_is_last(data);
+}
+
+Node* get_node_from_database(MarkovChain *markov_chain, void *data_ptr)
+{
+    if (!markov_chain || !markov_chain->database) return NULL;
+    Node *current = markov_chain->database->first;
+    while (current) {
+        MarkovNode *m_node = current->data;
+        if (markov_chain->func_comp(m_node->data, data_ptr) == ZERO) {
+            return current;
         }
-        curr = curr->next;
+        current = current->next;
     }
     return NULL;
 }
 
 /**
- * @brief מוסיף data_ptr כ-MarkovNode חדש אם לא קיים, או מחזיר את ה-Node הקיים.
+ * add_to_database:
+ * if data_ptr exists, return existing node.
+ * else create new MarkovNode, copy the data, and add to the end of the list.
  */
-Node *add_to_database(MarkovChain *markov_chain, void *data_ptr)
+Node* add_to_database(MarkovChain *markov_chain, void *data_ptr)
 {
-    /* בודקים אם קיים כבר בשרשרת */
-    Node *exist = get_node_from_database(markov_chain, data_ptr);
-    if (exist)
-    {
-        /* כבר קיים – לא מוסיפים מחדש */
-        return exist;
+    if (!markov_chain || !markov_chain->database) return NULL;
+
+    Node *existing = get_node_from_database(markov_chain, data_ptr);
+    if (existing) {
+        return existing;
     }
 
-    /* אחרת, יוצרים MarkovNode חדש */
-    MarkovNode *new_mnode = malloc(sizeof(MarkovNode));
-    if (!new_mnode)
-    {
-        printf(ALLOCATION_ERROR_MESSAGE);
+    MarkovNode *new_node = malloc(sizeof(MarkovNode));
+    if (!new_node) {
+        fprintf(stdout, ALLOCATION_ERROR_MESSAGE);
         return NULL;
     }
-    new_mnode->frequency_list = NULL;
-    new_mnode->freq_list_size = 0;
+    new_node->freq_list_size = ZERO;
+    new_node->frequency_list = NULL;
 
-    /* יש להעתיק את הדאטא ע"י הפונקציה שהמשתמש סיפק */
-    new_mnode->data = markov_chain->copy_func(data_ptr);
-    if (!new_mnode->data)
-    {
-        printf(ALLOCATION_ERROR_MESSAGE);
-        free(new_mnode);
+    new_node->data = markov_chain->func_copy(data_ptr);
+    if (!new_node->data) {
+        fprintf(stdout, ALLOCATION_ERROR_MESSAGE);
+        free(new_node);
         return NULL;
     }
 
-    /* כעת מוסיפים לרשימה המקושרת (שהיא חלק מה-MarkovChain) */
-    if (add(markov_chain->database, new_mnode) != 0)
-    {
-        /* נכשל בהוספה לרשימה */
-        printf(ALLOCATION_ERROR_MESSAGE);
-        markov_chain->free_data(new_mnode->data);
-        free(new_mnode);
+    if (add(markov_chain->database, new_node) != ZERO) {
+        fprintf(stdout, ALLOCATION_ERROR_MESSAGE);
+        markov_chain->func_free_data(new_node->data);
+        free(new_node);
         return NULL;
     }
-    /* מחזירים את ה-Node החדש שנוסף (שהוא ה-last ברשימה כרגע) */
-    return markov_chain->database->last;
+
+    return markov_chain->database->last; // the newly added node
 }
 
 /**
- * @brief מוסיף second_node ל-frequency_list של first_node.
- *        אם כבר קיים, מגדיל frequency. אחרת מוסיף איבר חדש (realloc).
+ * add_node_to_frequency_list:
+ * if second_node is already in first_node->frequency_list => increment frequency
+ * else => reallocate, add new MarkovNodeFrequency with freq=1
  */
 int add_node_to_frequency_list(MarkovNode *first_node, MarkovNode *second_node)
 {
-    if (!first_node || !second_node)
-    {
-        return 1; // כישלון
-    }
+    if (!first_node || !second_node) return SUCCESS;
 
-    /* בודקים אם second_node כבר קיים ברשימה של first_node */
-    for (int i = 0; i < first_node->freq_list_size; i++)
-    {
-        if (first_node->frequency_list[i].markov_node == second_node)
-        {
+    for (int i = ZERO; i < first_node->freq_list_size; i++) {
+        if (first_node->frequency_list[i].markov_node == second_node) {
             first_node->frequency_list[i].frequency++;
-            return 0;
+            return SUCCESS;
         }
     }
 
-    /* אם לא קיים – צריך להגדיל את המערך ב-1 באמצעות realloc */
-    MarkovNodeFrequency *tmp = realloc(first_node->frequency_list,
-        (first_node->freq_list_size + 1) * sizeof(MarkovNodeFrequency));
-    if (!tmp)
-    {
-        printf(ALLOCATION_ERROR_MESSAGE);
-        return 1;
+    MarkovNodeFrequency *new_list = realloc(first_node->frequency_list,
+        (first_node->freq_list_size + ONE) * sizeof(MarkovNodeFrequency));
+    if (!new_list) {
+        fprintf(stdout, ALLOCATION_ERROR_MESSAGE);
+        return FAILURE_EXIT;
     }
-    first_node->frequency_list = tmp;
+    first_node->frequency_list = new_list;
     first_node->frequency_list[first_node->freq_list_size].markov_node = second_node;
-    first_node->frequency_list[first_node->freq_list_size].frequency   = 1;
+    first_node->frequency_list[first_node->freq_list_size].frequency = ONE;
     first_node->freq_list_size++;
-    return 0;
+
+    return SUCCESS;
 }
 
 /**
- * @brief משחרר את כל הזיכרון של השרשרת, כולל כל ה-Nodes והדאטא שלהם.
+ * get_first_random_node:
+ * pick a random index from [0, database->size),
+ * check if it's not a "last" node, if it is => keep trying.
  */
-void free_database(MarkovChain **chain_ptr)
+MarkovNode* get_first_random_node(MarkovChain *markov_chain)
 {
-    if (!chain_ptr || !(*chain_ptr))
-    {
-        return;
-    }
-    MarkovChain *chain = *chain_ptr;
-    if (!chain->database)
-    {
-        /* אם אין רשימה בכלל, נשחרר רק את chain */
-        free(chain);
-        *chain_ptr = NULL;
-        return;
-    }
-
-    Node *curr = chain->database->first;
-    while (curr)
-    {
-        Node *next = curr->next;
-        MarkovNode *mnode = (MarkovNode *) curr->data;
-        if (mnode)
-        {
-            /* שחרור הדאטא הגנרית ע"י free_data של המשתמש */
-            if (mnode->data)
-            {
-                chain->free_data(mnode->data);
-            }
-            if (mnode->frequency_list)
-            {
-                free(mnode->frequency_list);
-            }
-            free(mnode);
-        }
-        free(curr);
-        curr = next;
-    }
-    free(chain->database);
-    free(chain);
-    *chain_ptr = NULL;
-}
-
-/**
- * @brief בוחר באופן רנדומלי MarkovNode שאינו "אחרון" (ע"פ is_last), מתוך השרשרת.
- */
-MarkovNode *get_first_random_node(MarkovChain *markov_chain)
-{
-    if (!markov_chain || !markov_chain->database
-        || markov_chain->database->size == 0)
-    {
+    if (!markov_chain || !markov_chain->database || markov_chain->database->size == ZERO) {
         return NULL;
     }
 
-    /* נגריל אינדקס ברשימה עד שנמצא אחד שאינו מצב-סיום (is_last==false) */
-    while (true)
-    {
-        int idx = get_random_number(markov_chain->database->size);
+    int size = markov_chain->database->size;
+    while (true) {
+        int idx = get_random_number(size);
+
         Node *curr = markov_chain->database->first;
-        for (int i = 0; i < idx; i++)
-        {
+        for (int i = ZERO; i < idx; i++) {
             curr = curr->next;
         }
-        MarkovNode *candidate = (MarkovNode *) curr->data;
-        if (!markov_chain->is_last(candidate->data))
-        {
+        MarkovNode *candidate = curr->data;
+        if (!is_last_data(markov_chain, candidate->data)) {
             return candidate;
         }
-        /* אם זה מצב-סיום, נמשיך לנסות... */
     }
 }
 
 /**
- * @brief בוחר next_node רנדומלי מתוך frequency_list של cur_markov_node לפי התפלגות תדירויות.
+ * get_next_random_node:
+ * choose next node from cur_markov_node->frequency_list with weighted random
  */
-MarkovNode *get_next_random_node(MarkovNode *cur_markov_node)
+MarkovNode* get_next_random_node(MarkovNode *cur_markov_node)
 {
-    if (!cur_markov_node || cur_markov_node->freq_list_size == 0)
-    {
+    if (!cur_markov_node || cur_markov_node->freq_list_size == ZERO) {
         return NULL;
     }
-
-    /* חישוב סכום כל ה-frequency כדי להגריל לפיו */
-    int total_freq = 0;
-    for (int i = 0; i < cur_markov_node->freq_list_size; i++)
-    {
+    int total_freq = ZERO;
+    for (int i = ZERO; i < cur_markov_node->freq_list_size; i++) {
         total_freq += cur_markov_node->frequency_list[i].frequency;
     }
+
     int r = get_random_number(total_freq);
-    int cumulative = 0;
-    for (int i = 0; i < cur_markov_node->freq_list_size; i++)
-    {
+    int cumulative = ZERO;
+    for (int i = ZERO; i < cur_markov_node->freq_list_size; i++) {
         cumulative += cur_markov_node->frequency_list[i].frequency;
-        if (r < cumulative)
-        {
+        if (r < cumulative) {
             return cur_markov_node->frequency_list[i].markov_node;
         }
     }
-    /* הגנה מפני floatת' שולית: אם לא נכנס בלולאה, נחזיר את האחרון */
-    return cur_markov_node
-           ->frequency_list[cur_markov_node->freq_list_size - 1]
-           .markov_node;
+    return cur_markov_node->frequency_list[cur_markov_node->freq_list_size - ONE].markov_node;
 }
 
 /**
- * @brief מייצרת ומדפיסה שרשרת רנדומלית.
- *        אם first_node == NULL, נבחר כזה רנדומלית שאינו "אחרון".
+ * generate_random_sequence:
+ * starting from first_node, print data,
+ * then pick next node until we hit is_last or max_length.
  */
 void generate_random_sequence(MarkovChain *markov_chain,
                               MarkovNode *first_node,
                               int max_length)
 {
-    if (!markov_chain || !markov_chain->database
-        || markov_chain->database->size == 0)
-    {
-        return;
-    }
-    if (!first_node)
-    {
-        first_node = get_first_random_node(markov_chain);
-        if (!first_node)
-        {
-            return;
-        }
-    }
+    if (!markov_chain || !first_node) return;
 
-    /* קודם מדפיסים את האיבר הראשון */
-    markov_chain->print_func(first_node->data);
-    MarkovNode *curr = first_node;
-    int count = 1;
+    int count = ONE;
+    markov_chain->func_print(first_node->data);
 
-    /* בונים את השרשרת */
-    while (count < max_length && !markov_chain->is_last(curr->data))
-    {
-        MarkovNode *next = get_next_random_node(curr);
-        if (!next)
-        {
+    MarkovNode *current = first_node;
+    while (count < max_length && !is_last_data(markov_chain, current->data)) {
+        MarkovNode *next = get_next_random_node(current);
+        if (!next) {
             break;
         }
-        printf(" "); /* מוסיפים רווח לפני ההדפסה הבאה, בדומה לחלק א' */
-        markov_chain->print_func(next->data);
-        curr = next;
+        printf(" ");
+        markov_chain->func_print(next->data);
+
+        current = next;
         count++;
     }
     printf("\n");
+}
+
+void free_database(MarkovChain ** ptr_chain)
+{
+    if (!ptr_chain || !(*ptr_chain)) return;
+
+    MarkovChain *chain = *ptr_chain;
+    if (!chain->database) {
+        free(chain);
+        *ptr_chain = NULL;
+        return;
+    }
+
+    Node *curr = chain->database->first;
+    while (curr) {
+        Node *next = curr->next;
+        MarkovNode *m_node = curr->data;
+        if (m_node) {
+            if (m_node->data) {
+                chain->func_free_data(m_node->data);
+            }
+            free(m_node->frequency_list);
+            free(m_node);
+        }
+        free(curr);
+        curr = next;
+    }
+
+    free(chain->database);
+    free(chain);
+    *ptr_chain = NULL;
 }
